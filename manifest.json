@@ -1,0 +1,10 @@
+{
+	"id"           : "last-month",
+	"name"         : "Last Month",
+	"version"      : "0.0.1",
+	"minAppVersion": "0.16.3",
+	"description"  : "New sidebar to list open tabs and pages that were created and/or modified in last few months.",
+	"author"       : "MrBertie",
+	"authorUrl"    : "https://github.com/MrBertie",
+	"isDesktopOnly": false
+}
