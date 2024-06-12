@@ -31,6 +31,6 @@ The interface is mostly intuitive and tries to follow the Obsidian standards.
 
 1. Number of months: how many months to show in the listing.
 2. Default open location: How to open a note, either a new tab, split, or new window.
-3. Hide folders or files: add one or more regular expressions to hide certain folders or files you do not want to show in the sidebar list.  The textbox below this shows the live results of the hide expressions, so that you can quickly see is it is working and producing the result you want.
+3. Hide folders or files: add one or more regular expressions to hide certain folders or files you do not want to show in the sidebar list.  The textbox below this shows the live results of the hide expressions, to quickly see if it is working and producing the result you want.
 
 I personally find this site helpful to learn about and test regular expressions: [RegExr: Learn, Build, & Test RegEx](https://regexr.com).
