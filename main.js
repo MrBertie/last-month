@@ -1,6 +1,6 @@
 'use strict';
 
-const { Plugin, ItemView, setIcon, setTooltip, Setting, EventRef,
+const { Plugin, ItemView, setIcon, setTooltip, Setting, EventRef, debounce,
   PluginSettingTab, FileView, Menu, TFile, WorkspaceLeaf } = require('obsidian');
 
 const DEFAULT_SETTINGS = {
@@ -21,6 +21,7 @@ const Lang = {
   lastMonth: 'LAST MONTH',
   lastMonths: 'LAST {count} MONTHS',
   hiddenFolders: 'Hidden folders:',
+  invalidRegex: '⚠️ Invalid regular expression',
   tipCollapse: 'Click to collapse',
   tipExpand: 'Click to expand',
   tipCollapseAll: 'Collapse',
@@ -104,6 +105,7 @@ class LastMonthView extends ItemView {
     this.settings = plugin.settings;
     this.menu = this.buildMonthMenu();
     this.collapsed = false;
+    this.hidden = {};
   }
 
   async onOpen() {
@@ -132,7 +134,7 @@ class LastMonthView extends ItemView {
     this.registerEvent(this.app.workspace.on('active-leaf-change', this.updateView.bind(this)));
   }
 
-  /******/
+  /* ⚒️ INTERNAL FUNCTIONS */
 
   addNavButtons() {
     const nav = createDiv({ cls: 'nav-header' });
@@ -197,7 +199,9 @@ class LastMonthView extends ItemView {
     let total = 0;
     weeks.forEach(item => total += item.length);
     
-    const rootEl = createDiv({ cls: 'lmp' });
+    const rootEl = this.contentEl;
+    rootEl.empty();
+    rootEl.addClass('lmp');
 
     // 🔆Total count header
     const totalEl = createDiv({ cls: 'tree-item lmp-total' });
@@ -254,11 +258,11 @@ class LastMonthView extends ItemView {
         const fileEl = childrenEl.createDiv({ cls: 'tree-item nav-file lmp-file' });
         let stat = '';
         if (hit.name !== Lang.newTab) {
-          stat = '\u{000A}\u{2302} ' + hit.path.substring(0, hit.path.lastIndexOf('/')) + 
+          stat = hit.path + 
             '\u{000A}⇄ ' + new Date(hit.file?.stat.mtime).toLocaleString(DEFAULT_SETTINGS.locale) + 
             '\u{000A}\u{263C} ' + new Date(hit.file?.stat.ctime).toLocaleString(DEFAULT_SETTINGS.locale);
         }
-        const tip = (hit.type == 'tab' ? Lang.openTab + '\u{000A}—\u{000A}' : '') + hit.name + stat;
+        const tip = (hit.type == 'tab' ? Lang.openTab + '\u{000A}—\u{000A}' : '') + stat;
         setTooltip(fileEl, tip, { placement: 'right' });
         const titleEl = fileEl.createDiv({
           cls: 'tree-item-self is-clickable nav-file-title lmp-title',
@@ -358,9 +362,6 @@ class LastMonthView extends ItemView {
         rootEl.appendChild(totalEl);
       }
     });
-
-    this.contentEl.empty();
-    this.contentEl.appendChild(rootEl);
   }
 
   buildMonthMenu() {
@@ -437,14 +438,16 @@ class LastMonthView extends ItemView {
   fetchFiles() {
     const today = new Date();
     const cutoff = today.setMonth(today.getMonth() - this.settings.months);
-    const patterns = (this.settings.hideFolders ? this.settings.hideFolders.split('\n') : []);
+    const patterns = (this.settings.hiddenFolders ? this.settings.hiddenFolders.split('\n') : []);
     const files = this.app.vault.getMarkdownFiles();
     const active_file = this.app.workspace.getActiveFile();
     const active_path = (active_file ? active_file.path : '');
+    const hide_file = hideFile.bind(this);
+    this.hidden = {};
 
     const hits = files
       .filter((file) => {
-        const include = !hideFile(file.path) && 
+        const include = !hide_file(file.path) && 
           (file.stat.ctime > cutoff || file.stat.mtime > cutoff);
         return include;
         })
@@ -477,7 +480,6 @@ class LastMonthView extends ItemView {
       }
       grps.get(hdr).push(hit);
     });
-
     return grps;
     
     // memoize the header to save a few ms
@@ -509,7 +511,28 @@ class LastMonthView extends ItemView {
       let hide = false
       if (patterns) {
         hide = patterns.some((pattern) => {
-          return new RegExp(pattern).test(path);
+          let match;
+          let valid;
+          if (!pattern) {
+            match = false;
+          } else {
+            try {
+              match = new RegExp(pattern).test(path);
+              valid = true;
+            } catch(error) {
+              match = true;
+              valid = false;
+            }
+          }
+          if (match) {
+            if (!this.hidden[pattern]) this.hidden[pattern] = '';
+            if (valid) {
+              this.hidden[pattern] += '  — ' + path + '\n';
+            } else {
+              this.hidden[pattern] = '  — ' + Lang.invalidRegex + '\n';
+            }
+          }
+          return match;
         });
       }
       return hide;
@@ -565,8 +588,17 @@ class LastMonthSettingTab extends PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
+    this.hidden = undefined;
   }
   display() {
+    const hidden_folders = () => {
+      let folders = '';
+      Object.entries(this.plugin.view.hidden).forEach(([key, value]) => {
+        folders += '▶ ' + key + ' ◀\n' + value + '\n';
+      });
+      return folders;
+    }
+
     const { containerEl } = this;
     containerEl.empty();
     new Setting(containerEl)
@@ -606,18 +638,30 @@ class LastMonthSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Hide folders or files')
-      .setDesc('Regular expression patterns for folders and files to hide. One per line')
+      .setDesc('Use regular expression patterns to hide certain folders and files. You can add one per line. Check your results in the list below.')
       .addTextArea((text) => {
         text
           .setPlaceholder('^daily/\n\\.png$\nfoobar.*baz')
           .setValue(this.plugin.settings.hiddenFolders)
-          .onChange(async (value) => {
+          .onChange(debounce(async (value) => {
             this.plugin.settings.hiddenFolders = value;
             this.plugin.saveSettings();
             this.plugin.view.updateView();
-          });
+            this.hidden.setValue(hidden_folders());
+          }, 1000, true));
+        text.inputEl.cols = 35;
         text.inputEl.rows = 4;
-        text.inputEl.cols = 25;
+      });
+
+      
+    new Setting(containerEl)
+      .setName('List of hidden files or folders')
+      .setDesc('For checking purposes.\u{000A}A list of all the hidden folders matched by the above regular expressions.\u{000A}Also shows invalid expressions so that you can correct them.')
+      .addTextArea((text) => {
+        text.setValue(hidden_folders());
+        text.inputEl.cols = 35;
+        text.inputEl.rows = 20;
+        this.hidden = text;
       });
   }
 }

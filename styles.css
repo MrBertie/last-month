@@ -1,5 +1,5 @@
-[data-type="last-month"] > .view-content {
-  padding: 8px 8px 12px 8px;
+.lmp {
+  padding: 4px 8px 32px !important;
 }
 
 :is(.lmp-tabs, .lmp-total) {
@@ -24,19 +24,18 @@
 .lmp-header {
   margin-top: 4px;
 }
-
-.lmp-tab {
-  color: var(--color-cyan);
-}
-
+  
 .lmp-header .tree-item-inner-text {
   color: var(--text-normal);
   font-size: 1.1em;
 }
-
+    
 .lmp-title {
   justify-content: space-between;
   align-items: unset;
+  &.is-active .lmp-tab {
+    color: var(--text-accent);
+  }
 }
 
 .lmp-title-content {
