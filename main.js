@@ -537,7 +537,6 @@ class LastMonthView extends ItemView {
         }
       }
     });
-    console.log('open files', openFiles);
     return openFiles;
   }
 }
