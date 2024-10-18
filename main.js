@@ -4,16 +4,17 @@ const { Plugin, ItemView, setIcon, setTooltip, Setting, EventRef, debounce,
   PluginSettingTab, FileView, Menu, TFile, WorkspaceLeaf } = require('obsidian');
 
 const DEFAULT_SETTINGS = {
-  months: 1,
+  countMonths: 1,
   openType: 'tab',
   hiddenFolders: '',
-  locale: 'en-ZA',
+  rainbowHeaders: true,
+  dateLocale: 'en-ZA',
 };
 
 const Lang = {
   name: 'Last Month',
-  openTabs: 'Open tabs',
-  openTab: 'Click to activate tab',
+  // openTabs: 'Open tabs',
+  // openTab: 'Click to activate tab',
   newTab: 'New tab',
   openSettings: 'Open settings',
   updateView: 'Update view',
@@ -22,21 +23,20 @@ const Lang = {
   lastMonths: 'LAST {count} MONTHS',
   hiddenFolders: 'Hidden folders:',
   invalidRegex: '⚠️ Invalid regular expression',
-  tipCollapse: 'Click to collapse',
-  tipExpand: 'Click to expand',
-  tipCollapseAll: 'Collapse',
-  tipExpandAll: 'Expand all',
-  lblCloseTab: 'Close this tab',
-  lblOpenTab: 'Open in new tab',
-  lblOpenRight: 'Open to right',
-  optMonths: { 1:'1 month', 2:'2 months', 3:'3 months', 4:'4 months', 5:'5 months', 6:'6 months' },
-  optOpenType: { tab: 'Tab', split: 'Split', window: 'Window', },
+  collapseTip: 'Click to collapse',
+  expandTip: 'Click to expand',
+  collapseAllTip: 'Collapse',
+  expandAllTip: 'Expand all',
+  // closeTabLabel: 'Close this tab',
+  openTabLabel: 'Open in new tab',
+  openRightLabel: 'Open to right',
+  monthOptions: { 1:'1 month', 2:'2 months', 3:'3 months', 4:'4 months', 5:'5 months', 6:'6 months' },
+  openTypeOptions: { tab: 'Tab', split: 'Split', window: 'Window', },
 }
 
 const LAST_MONTH_VIEW = 'last-month';
 
 class LastMonthPlugin extends Plugin {
-  options;
   constructor() {
     super(...arguments);
   }
@@ -51,17 +51,17 @@ class LastMonthPlugin extends Plugin {
     
     this.addCommand({
       id: 'last-month-open',
-      name: 'Open',
+      name: 'Open sidebar',
       callback: this.activateView.bind(this),
     });
 
-    // Register in "Settings > Page Previews > Last Month" (i.e. Ctrl to show)
+    // Register in "Settings > Page Previews > Last Month" (i.e. Ctrl to show Preview)
     this.app.workspace.registerHoverLinkSource(LAST_MONTH_VIEW, {
       display: Lang.name,
       defaultMod: true,
     });
 
-    this.app.workspace.onLayoutReady(this.activateView.bind(this));
+    //this.app.workspace.onLayoutReady(this.activateView.bind(this));
 
     this.addSettingTab(new LastMonthSettingTab(this.app, this));
 
@@ -83,18 +83,15 @@ class LastMonthPlugin extends Plugin {
 
   async activateView() {
     const { workspace } = this.app;
-    const [leaf] = workspace.getLeavesOfType(LAST_MONTH_VIEW);
+    let leaf = workspace.getLeavesOfType(LAST_MONTH_VIEW).first();
     if (!leaf) {
-      await this.app.workspace
-        .getLeftLeaf(false) // false = no split
-        .setViewState({
+      leaf = workspace.getRightLeaf(false); // false => no split
+      await leaf.setViewState({
           type: LAST_MONTH_VIEW,
           active: true,
         });
     }
-    if (leaf) {
-      workspace.revealLeaf(leaf);
-    }
+    workspace.revealLeaf(leaf);
   }
 }
 
@@ -105,7 +102,7 @@ class LastMonthView extends ItemView {
     this.settings = plugin.settings;
     this.menu = this.buildMonthMenu();
     this.collapsed = false;
-    this.hidden = {};
+    this.hiddenFiles = {};
   }
 
   async onOpen() {
@@ -137,32 +134,34 @@ class LastMonthView extends ItemView {
   /* ⚒️ INTERNAL FUNCTIONS */
 
   addNavButtons() {
-    const nav = createDiv({ cls: 'nav-header' });
-    this.containerEl.parentElement.prepend(nav);
-    const buttons = nav.createDiv({ cls: 'nav-buttons-container' });
+    const navEl = createDiv({ cls: 'nav-header' });
+    const buttonsEl = navEl.createDiv({ cls: 'nav-buttons-container' });
   
-    const monthBtn = buttons.createDiv({ cls: 'clickable-icon nav-action-button' });
+    const monthBtn = buttonsEl.createDiv({ cls: 'clickable-icon nav-action-button' });
     setIcon(monthBtn, 'calendar');
     setTooltip(monthBtn, Lang.noOfMonths, { placement: 'bottom' });
-    monthBtn.onclick = (evt) => {
-      this.menu.showAtMouseEvent(evt);
-      evt.stopPropagation();
+    monthBtn.onclick = (event) => {
+      this.menu.showAtMouseEvent(event);
+      event.stopPropagation();
     }
-    const updateBtn = buttons.createDiv({ cls: 'clickable-icon nav-action-button' });
+
+    const updateBtn = buttonsEl.createDiv({ cls: 'clickable-icon nav-action-button' });
     setIcon(updateBtn, 'refresh-cw');
     setTooltip(updateBtn, Lang.updateView, { placement: 'bottom' });
     updateBtn.onclick = () => {
       this.updateView();
     }
-    const settingsBtn = buttons.createDiv({cls: 'clickable-icon nav-action-button' });
+
+    const settingsBtn = buttonsEl.createDiv({cls: 'clickable-icon nav-action-button' });
     setIcon(settingsBtn, 'settings');
     setTooltip(settingsBtn, Lang.openSettings, { placement: 'bottom' });
     settingsBtn.onclick = () => {
       this.openSettings();
     }
-    const collapseBtn = buttons.createDiv({cls: 'clickable-icon nav-action-button' });
+
+    const collapseBtn = buttonsEl.createDiv({cls: 'clickable-icon nav-action-button' });
     setIcon(collapseBtn, 'chevrons-down-up');  // default
-    setTooltip(collapseBtn, Lang.tipCollapseAll, { placement: 'bottom' }); //default
+    setTooltip(collapseBtn, Lang.collapseAllTip, { placement: 'bottom' }); //default
     collapseBtn.onclick = () => {
       this.collapsed = !this.collapsed;
       this.contentEl
@@ -171,14 +170,15 @@ class LastMonthView extends ItemView {
           if (this.collapsed) {
             el.addClass('is-collapsed');
             setIcon(collapseBtn, 'chevrons-up-down');
-            setTooltip(collapseBtn, Lang.tipExpandAll, { placement: 'bottom' });
+            setTooltip(collapseBtn, Lang.expandAllTip, { placement: 'bottom' });
           } else {
             el.removeClass('is-collapsed');
             setIcon(collapseBtn, 'chevrons-down-up');
-            setTooltip(collapseBtn, Lang.tipExpandAll, { placement: 'bottom' });
+            setTooltip(collapseBtn, Lang.expandAllTip, { placement: 'bottom' });
           }
         });
     }
+    this.containerEl.parentElement.prepend(navEl); // Add at the top of the main view div
   }
 
   /**
@@ -186,106 +186,94 @@ class LastMonthView extends ItemView {
    * @param {EventRef} eventRef 
    * @returns {void}
    */
-  updateView(evt) {
+  updateView(event) {
     if (this === undefined) return; // duplicated events?
-    if (evt instanceof WorkspaceLeaf && 
-      evt.getViewState().type === LAST_MONTH_VIEW) return;
+    if (event instanceof WorkspaceLeaf && 
+      event.getViewState().type === LAST_MONTH_VIEW) return;
 
-    const weeks = this.fetchFiles();
-    const tabs = this.getOpenTabs();
-    weeks.set(Lang.openTabs, tabs);
+    const { groups: groupHeaders, meta } = this.getRecentFiles();
     
-    // 🔆Grand total of recent files
-    let total = 0;
-    weeks.forEach(item => total += item.length);
-    
-    const rootEl = this.contentEl;
-    rootEl.empty();
-    rootEl.addClass('lmp');
+    const contentEl = this.contentEl;
+    contentEl.empty();
+    contentEl.addClass('lmp');
 
-    // 🔆Total count header
+    // 🔆Header for the Total Count
     const totalEl = createDiv({ cls: 'tree-item lmp-total' });
     const titleEl = totalEl.createDiv({ cls: 'tree-item-self'});
+    setTooltip(titleEl, meta.first + ' — ' + meta.last);
     const iconEl = titleEl.createDiv({ cls: 'tree-item-icon' });
     setIcon(iconEl, 'calendar-range');
     const innerEl = titleEl.createDiv({ cls: 'tree-item-inner' });
-    let title = '';
+    let title;
     if (this.settings.months > 1) {
-      title = Lang.lastMonths.replace('{count}', this.settings.months);
+      title = Lang.lastMonths.replace('{count}', this.settings.countMonths);
     } else {
-      title = Lang.lastMonth;
+      title = Lang.lastMonth; 
     }
     const textEl = innerEl.createSpan({ cls: 'tree-item-inner-text', text: title });
     const flairEl = titleEl.createDiv({ cls: 'tree-item-flair-outer' });
-    flairEl.createSpan({ cls: 'tree-item-flair', text: total });
+    flairEl.createSpan({ cls: 'tree-item-flair', text: meta.total });
     setTooltip(flairEl, 
       Lang.hiddenFolders + '\u{000A}—\u{000A}' + this.settings.hiddenFolders.replace('\n', '\u{000A}'));
 
-    weeks.forEach((hits, hdr) => {
-      // 🔆Group headers for each week
-      const itemEl = rootEl.createDiv({ cls: 'tree-item' });
+    contentEl.appendChild(totalEl);
+
+    let color = 0;
+    groupHeaders.forEach((hits, header) => {
+
+      // 🔆Headers for the Week Groups
+      const itemEl = contentEl.createDiv({ cls: 'tree-item' });
       const headerEl = itemEl.createDiv({ cls: 'tree-item-self is-clickable ' });
-      setTooltip(headerEl, Lang.tipCollapse, { placement: 'right' });
+      setTooltip(headerEl, Lang.collapseTip, { placement: 'right' });
       const iconEl = headerEl.createDiv({ cls: 'tree-item-icon' });
       const innerEl = headerEl.createDiv({ cls: 'tree-item-inner' });
       const textEl = innerEl.createSpan({
         cls: 'tree-item-inner-text',
-        text: hdr.toUpperCase(),
+        text: header.toUpperCase(),
       });
       const flairEl = headerEl.createDiv({ cls: 'tree-item-flair-outer' });
       let count = hits.length;
       flairEl.createSpan({ cls: 'tree-item-flair', text: count });
-      // Either tabs or files
-      if (hdr == Lang.openTabs) {
-        this.tabsEl = itemEl.addClass('lmp-tabs');
-        setIcon(iconEl, 'file-stack');
-      } else {
-        itemEl.addClass('lmp-header');
-        setIcon(iconEl, 'calendar');
+      itemEl.addClass('lmp-header');
+      setIcon(iconEl, 'calendar');
+      if (this.settings.rainbow) {
+        textEl.addClass('lmp-color-' + (color % 8));
+        color++;
       }
       
-      // Expand/Collapse header
-      headerEl.onclick = (evt) => {
-        evt.preventDefault();
+      // Enable Expand/Collapse of header
+      headerEl.onclick = (event) => {
+        event.preventDefault();
         const collapsed = childrenEl.classList.toggle('is-collapsed');
-        const tip = (collapsed ? Lang.tipExpand : Lang.tipExpand);
+        const tip = (collapsed ? Lang.expandTip : Lang.expandTip);
         setTooltip(headerEl, tip);
       }
       
-      // 🔆Children: Matching files for each week header
+      // 🔆Children: Matching files for each Week header
       const childrenEl = itemEl.createDiv({ cls: 'tree-item-children' });
       hits.forEach(hit => {
+
         const fileEl = childrenEl.createDiv({ cls: 'tree-item nav-file lmp-file' });
-        let stat = '';
-        if (hit.name !== Lang.newTab) {
-          stat = hit.path + 
-            '\u{000A}⇄ ' + new Date(hit.file?.stat.mtime).toLocaleString(DEFAULT_SETTINGS.locale) + 
-            '\u{000A}\u{263C} ' + new Date(hit.file?.stat.ctime).toLocaleString(DEFAULT_SETTINGS.locale);
-        }
-        const tip = (hit.type == 'tab' ? Lang.openTab + '\u{000A}—\u{000A}' : '') + stat;
+        const tip = hit.path + 
+            '\u{000A}⇄ ' + new Date(hit.file?.stat.mtime).toLocaleString(DEFAULT_SETTINGS.dateLocale) + 
+            '\u{000A}\u{263C} ' + new Date(hit.file?.stat.ctime).toLocaleString(DEFAULT_SETTINGS.dateLocale);
         setTooltip(fileEl, tip, { placement: 'right' });
         const titleEl = fileEl.createDiv({
           cls: 'tree-item-self is-clickable nav-file-title lmp-title',
         });
         const iconEl = titleEl.createDiv({ cls: 'tree-item-icon' });
         const textEl = titleEl.createDiv({
-          cls: 'tree-item-inner nav-file-title-content lmp-title-content' 
+          cls: 'tree-item-inner nav-file-title-content lmp-title-content',
+          text: hit.name,
         });
-        textEl.setText(hit.name);
-        let icon;
-        // formatting for tabs vs. files
-        if (hit.type == 'tab') {
-          icon = 'grip-vertical';
-          textEl.addClass('lmp-tab');
-          iconEl.addClass('lmp-tab');
-          if (hit.active) titleEl.addClass('is-active');
-        } else {
-          icon = (hit.new ? 'file-plus-2' : 'file');
-        }
+        const icon = (hit.new ? 'file-plus-2' : 'file');
         setIcon(iconEl, icon);
 
         if (hit.active) {
           titleEl.addClass('is-active');
+        }
+        if (hit.leaf) {
+          titleEl.addClass('is-open');
         }
 
         // Drag file to editor to create a link
@@ -297,82 +285,56 @@ class LastMonthView extends ItemView {
           dragManager.onDragStart(event, dragData);
         });
 
-        // File preview popover
+        // Trigger the file preview popover
         titleEl.addEventListener('mouseover', (event) => {
           this.app.workspace.trigger('hover-link', {
             event,
             source: LAST_MONTH_VIEW,
-            hoverParent: rootEl,
+            hoverParent: contentEl,
             targetEl: fileEl,
             linktext: hit.path,
           });
         });
 
-        if (hit.type == 'tab') {
-          // Option to close this tab
-          titleEl.addEventListener('contextmenu', (event) => {
-            const file = this.app.vault.getAbstractFileByPath(hit.path);
-            const menu = new Menu();
-            menu.addItem(item => {
-              item.setTitle(Lang.lblCloseTab);
-              item.setIcon('x');
-              item.setSection('open');
-              item.onClick(() => hit.leaf.detach());
-            });
-            this.app.workspace.trigger('file-menu', menu, file, '');
-            menu.showAtPosition({ x: event.clientX, y: event.clientY });
+        // Add the extra open location options to the the file context menu
+        titleEl.addEventListener('contextmenu', (event) => {
+          const file = this.app.vault.getAbstractFileByPath(hit.path);
+          const menu = new Menu();
+          menu.addItem(item => {
+            item.setTitle(Lang.openTabLabel);
+            item.setIcon('file-plus');
+            item.setSection('open');
+            item.onClick(() => this.openFile(hit, false, options.tab));
           });
+          menu.addItem(item => {
+            item.setTitle(Lang.openRightLabel);
+            item.setIcon('separator-vertical');
+            item.setSection('open');
+            item.onClick(() => this.openFile(hit, false, options.split));
+          });
+          this.app.workspace.trigger('file-menu', menu, file, '');
+          menu.showAtPosition({ x: event.clientX, y: event.clientY });
+        });
 
-          // Activate this tab on click
-          titleEl.addEventListener('click', (event) => {
-            this.app.workspace.setActiveLeaf(hit.leaf);
-          });
-        } else {
-          // Add the extra open location options to the the file context menu
-          titleEl.addEventListener('contextmenu', (event) => {
-            const file = this.app.vault.getAbstractFileByPath(hit.path);
-            const menu = new Menu();
-            menu.addItem(item => {
-              item.setTitle(Lang.lblOpenTab);
-              item.setIcon('file-plus');
-              item.setSection('open');
-              item.onClick(() => this.openFile(hit, false, options.tab));
-            });
-            menu.addItem(item => {
-              item.setTitle(Lang.lblOpenRight);
-              item.setIcon('separator-vertical');
-              item.setSection('open');
-              item.onClick(() => this.openFile(hit, false, options.split));
-            });
-            this.app.workspace.trigger('file-menu', menu, file, '');
-            menu.showAtPosition({ x: event.clientX, y: event.clientY });
-          });
-  
-          // Open a new tab/split/window on click
-          // TODO: open in a new tab is not already open?
-          titleEl.addEventListener('click', (event) => {
-            this.openFile(hit, event.ctrlKey || event.metaKey);
-          });
-        }
+        // Open a new tab/split/window on click
+        // TODO: open in a new tab if not already open? Difficult!
+        titleEl.addEventListener('click', (event) => {
+          this.openFile(hit, event.ctrlKey || event.metaKey);
+        });
       });
-
-      rootEl.appendChild(childrenEl);
-      // Insert the totals header after the tabs group
-      if (hdr == Lang.openTabs) {
-        rootEl.appendChild(totalEl);
-      }
+      contentEl.appendChild(childrenEl);
     });
   }
 
   buildMonthMenu() {
     const menu = new Menu();
-    for (const [key, value] of Object.entries(Lang.optMonths) ) {
+    for (const [key, value] of Object.entries(Lang.monthOptions) ) {
       menu.addItem(item => {
         item.setTitle(value)
         item.setIcon('calendar')
-        item.setChecked(key == this.settings.months)
+        item.setChecked(key == this.settings.countMonths)
         item.onClick(() => {
-          this.settings.months = Number(value.substring(0, 1));
+          this.settings.countMonths = Number(value.substring(0, 1));
           this.menu = this.buildMonthMenu();
           this.plugin.saveSettings();
           this.updateView();
@@ -384,66 +346,84 @@ class LastMonthView extends ItemView {
 
   openSettings() {
     this.app.setting.open();
-    if (this.app.setting.lastTabId !== this.plugin.manifest.id) {
-        this.app.setting.openTabById(this.plugin.manifest.id);
-    }
+    this.app.setting.openTabById(this.plugin.manifest.id);
   }
 
   /**
    * Open the provided file in the most recent leaf.
-   * @param {TFile} file
+   * @param {THit} hit
    * @param {boolean} split 
    * Should file be opened in a new split, or in the most recent split. 
    * True if most recent split is pinned.
-   * @param {string} target
+   * @param {string} openType how should the tab be opened
    * @returns {void}
    */
-  openFile(hit, split = false, target = null) {
+  openFile(hit, split = false, openType = null) {
     // sanity check to be sure the file still exists
-    const target_file = this.app.vault.getFileByPath(hit.file.path);
-    if (target_file) {
-      let leaf = this.app.workspace.getMostRecentLeaf();
-      const create_leaf = split || leaf.getViewState().pinned;
-      if (create_leaf) {
-        if (target === options.split || this.plugin.settings.openType === 'split') {
-          leaf = this.app.workspace.getLeaf('split');
-        } else if (target === options.window || this.plugin.settings.openType === 'window') {
-          leaf = this.app.workspace.getLeaf('window');
-        } else if (target === options.tab || this.plugin.settings.openType === 'tab') {
-          leaf = this.app.workspace.getLeaf('tab');
+    const targetFile = this.app.vault.getFileByPath(hit.file.path);
+    if (targetFile) {
+      // Is the file already open in a tab/window somewhere?
+      if (hit.leaf) {
+        this.app.workspace.setActiveLeaf(hit.leaf);
+      } else {
+        let leaf = this.app.workspace.getMostRecentLeaf();
+        const canCreateLeaf = split || leaf.getViewState().pinned;
+        if (canCreateLeaf) {
+          if (openType === options.split || this.plugin.settings.openType === 'split') {
+            leaf = this.app.workspace.getLeaf('split');
+          } else if (openType === options.window || this.plugin.settings.openType === 'window') {
+            leaf = this.app.workspace.getLeaf('window');
+          } else if (openType === options.tab || this.plugin.settings.openType === 'tab') {
+            leaf = this.app.workspace.getLeaf('tab');
+          }
         }
+        leaf.openFile(targetFile);
       }
-      leaf.openFile(target_file);
     }
   }
 
-  /** TFileHit type
+  /**
    * @typedef {Object} THit
    * @property {TFile} file
    * @property {string} name
    * @property {string} path
    * @property {Date} date
+   * @property {Date} week
    * @property {boolean} new
    * @property {WorkspaceLeaf} leaf
    * @property {string} type
+   * @property {boolean} active
    */
 
-  /** @typedef {Map<string, Array<THit>>} THits */
+  ///** @typedef {Map<string, Array<THit>>} THits */
 
   /**
-   * Fetch created and modified files from recent months (setting)
-   * If a file was created and then modified in the same week then the created one is shown
-   * @returns {THits} key = group header; values = [] of THit
+   * @typedef {Map} THits
+   * @property {string} header
+   * @property {Array<THit>}
    */
-  fetchFiles() {
+
+  /**
+   * Get created and modified files from recent months (setting)
+   * If a file was created and then modified in the same week then the created one is shown
+   * @returns {{THits, Object}} THits, meta: {first, last, total}
+   */
+  getRecentFiles() {
     const today = new Date();
-    const cutoff = today.setMonth(today.getMonth() - this.settings.months);
+    let cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - this.settings.countMonths);
     const patterns = (this.settings.hiddenFolders ? this.settings.hiddenFolders.split('\n') : []);
     const files = this.app.vault.getMarkdownFiles();
     const active_file = this.app.workspace.getActiveFile();
     const active_path = (active_file ? active_file.path : '');
     const hide_file = hideFile.bind(this);
-    this.hidden = {};
+    const meta = { 
+      first: today.toLocaleString('en-US', { month: 'short', day: 'numeric' }), // e.g. "May 10"
+      last: cutoff.toLocaleString('en-US', { month: 'short', day: 'numeric' }), 
+      total: 0 
+    };
+    this.hiddenFiles = {};
+    const openFiles = this.getOpenFiles();
 
     const hits = files
       .filter((file) => {
@@ -454,7 +434,9 @@ class LastMonthView extends ItemView {
       .map((file) => {
         const cweek = getMonday(file.stat.ctime);
         const mweek = getMonday(file.stat.mtime);
-        const is_new = (cweek === mweek); // created during this week
+        const isNew = (cweek === mweek); // created during this week
+        const leaf = openFiles[file.path]?.leaf ?? null;
+        const active = openFiles[file.path]?.active ?? false;
         /** @type {THit} */
         const hit = {
           file: file,
@@ -462,26 +444,29 @@ class LastMonthView extends ItemView {
           path: file.path,
           date: file.stat.mtime,
           week: mweek,
-          new: is_new,
-          leaf: null,
+          new: isNew,
+          leaf: leaf,
           type: 'file',
-          active: file.path === active_path,
+          active: active,
         }
         return hit;
       })
       .sort((a, b) => b.date - a.date);
 
-    const grps = new Map().set(Lang.openTabs, []);  // Top group for the open tabs to add later
-
+    /** @type {THits} */
+    const groups = new Map();
+    meta.total = hits.length;
     hits.forEach((hit) => {
       const hdr = getHeader(hit.week);
-      if (!grps.has(hdr)) {
-        grps.set(hdr, []);
+      if (!groups.has(hdr)) {
+        groups.set(hdr, []);
       }
-      grps.get(hdr).push(hit);
+      groups.get(hdr).push(hit);
     });
-    return grps;
+    return { groups, meta };
     
+    /* ⚒️ INTERNAL FUNCTIONS */
+
     // memoize the header to save a few ms
     function getHeader(week, cache = {}) {
       if (week in cache) return cache(week);
@@ -508,9 +493,9 @@ class LastMonthView extends ItemView {
     }
 
     function hideFile(path) {
-      let hide = false
+      let hidden = false
       if (patterns) {
-        hide = patterns.some((pattern) => {
+        hidden = patterns.some((pattern) => {
           let match;
           let valid;
           if (!pattern) {
@@ -525,75 +510,49 @@ class LastMonthView extends ItemView {
             }
           }
           if (match) {
-            if (!this.hidden[pattern]) this.hidden[pattern] = '';
+            if (!this.hiddenFiles[pattern]) this.hiddenFiles[pattern] = '';
             if (valid) {
-              this.hidden[pattern] += '  — ' + path + '\n';
+              this.hiddenFiles[pattern] += '  — ' + path + '\n';
             } else {
-              this.hidden[pattern] = '  — ' + Lang.invalidRegex + '\n';
+              this.hiddenFiles[pattern] = '  — ' + Lang.invalidRegex + '\n';
             }
           }
           return match;
         });
       }
-      return hide;
+      return hidden;
     }
   }
 
-  /**
-   * @returns {Array<THit>}}
-   */
-  getOpenTabs() {
-    /** @type {Array<THit>} */
-    let tabs = [];
+  getOpenFiles() {
+    const openFiles = {};
     const active_id = this.app.workspace.getMostRecentLeaf().id;
     this.app.workspace.iterateRootLeaves((leaf) => {
-      /** @type {TFile} */
       const view = leaf.view;
-      let hit = {};
       if (view instanceof FileView && view.file?.name) {
         const file = view.file;
-        hit = {
-          file: file,
-          name: file.basename,
-          path: file.path,
-          date: file.stat.mtime,
-          new: false,
-          week: null,
+        openFiles[file.path] = {
           leaf: leaf,
-          type: 'tab',
-          active: leaf.id === active_id,
-        }
-      } else {
-        let name = leaf.view.getViewType();
-        name = name == 'empty' ? Lang.newTab : name;
-        hit = {
-          file: undefined,
-          name: name,
-          path: '',
-          date: new Date(),
-          new: true,
-          week: null,
-          leaf: leaf,
-          type: 'tab',
           active: leaf.id === active_id,
         }
       }
-      tabs.push(hit);
     });
-    return tabs;
+    console.log('open files', openFiles);
+    return openFiles;
   }
 }
+
 
 class LastMonthSettingTab extends PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
-    this.hidden = undefined;
+    this.hiddenPreview = undefined;
   }
   display() {
-    const hidden_folders = () => {
+    const hiddenFiles = () => {
       let folders = '';
-      Object.entries(this.plugin.view.hidden).forEach(([key, value]) => {
+      Object.entries(this.plugin.view.hiddenFiles).forEach(([key, value]) => {
         folders += '▶ ' + key + ' ◀\n' + value + '\n';
       });
       return folders;
@@ -601,25 +560,23 @@ class LastMonthSettingTab extends PluginSettingTab {
 
     const { containerEl } = this;
     containerEl.empty();
-    new Setting(containerEl)
-      .setName(this.plugin.manifest.name)
-      .setHeading();
+    containerEl.addClass('lmp-settings');
 
     new Setting(containerEl)
-    .setName('Number of months')
-    .setDesc(
-      'Number of recent months to show'
-    )
-    .addDropdown((dropdown) => {
-      dropdown
-        .addOptions(Lang.optMonths)
-        .setValue(this.plugin.settings.months)
-        .onChange(async (value) => {
-          this.plugin.settings.months = value;
-          await this.plugin.saveSettings();
-          this.plugin.view.updateView();
-        })
-    });
+      .setName('Number of months')
+      .setDesc(
+        'Number of recent months to show'
+      )
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOptions(Lang.monthOptions)
+          .setValue(this.plugin.settings.countMonths)
+          .onChange(async (value) => {
+            this.plugin.settings.countMonths = value;
+            await this.plugin.saveSettings();
+            this.plugin.view.updateView();
+          })
+      });
 
     new Setting(containerEl)
       .setName('Default open location')
@@ -628,13 +585,26 @@ class LastMonthSettingTab extends PluginSettingTab {
       )
       .addDropdown((dropdown) => {
         dropdown
-          .addOptions(Lang.optOpenType)
+          .addOptions(Lang.openTypeOptions)
           .setValue(this.plugin.settings.openType)
           .onChange(async (value) => {
             this.plugin.settings.openType = value;
             await this.plugin.saveSettings();
           });
       });
+
+    new Setting(containerEl)
+      .setName('Rainbow headers')
+      .setDesc('Alternate header colors between the default theme base colours')
+      .addToggle((tog) => {
+        tog
+          .setValue(this.plugin.settings.rainbowHeaders)
+          .onChange(async (value) => {
+            this.plugin.settings.rainbowHeaders = value;
+            await this.plugin.saveSettings();
+            this.plugin.view.updateView();
+          });
+      })
 
     new Setting(containerEl)
       .setName('Hide folders or files')
@@ -647,21 +617,18 @@ class LastMonthSettingTab extends PluginSettingTab {
             this.plugin.settings.hiddenFolders = value;
             this.plugin.saveSettings();
             this.plugin.view.updateView();
-            this.hidden.setValue(hidden_folders());
+            this.hiddenPreview.setValue(hiddenFiles());
           }, 1000, true));
-        text.inputEl.cols = 35;
-        text.inputEl.rows = 4;
       });
 
       
     new Setting(containerEl)
-      .setName('List of hidden files or folders')
+      .setName('Preview of hidden files or folders')
       .setDesc('For checking purposes.\u{000A}A list of all the hidden folders matched by the above regular expressions.\u{000A}Also shows invalid expressions so that you can correct them.')
       .addTextArea((text) => {
-        text.setValue(hidden_folders());
-        text.inputEl.cols = 35;
-        text.inputEl.rows = 20;
-        this.hidden = text;
+        text.setValue(hiddenFiles());
+        this.hiddenPreview = text;  // hold a class ref for updates
+        text.inputEl.setCssProps({ height: "20em"});
       });
   }
 }

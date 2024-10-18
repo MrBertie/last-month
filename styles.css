@@ -2,23 +2,16 @@
   padding: 4px 8px 32px !important;
 }
 
-:is(.lmp-tabs, .lmp-total) {
+.lmp-total {
+  border: 1.5px solid var(--background-modifier-border);
+  border-radius: 4px;
   color: var(--text-muted);
   letter-spacing: 0.65px !important;
+  margin-top: 8px;
   padding-top: 2px;
-  border: 0.75px solid var(--background-modifier-border);
-  border-radius: 4px;
   .tree-item-inner-text {
     font-size: 1.12em;
   }
-}
-
-.lmp-tabs {
-  margin-bottom: 4px;
-}
-
-.lmp-total {
-  margin-top: 8px;
 }
 
 .lmp-header {
@@ -33,8 +26,11 @@
 .lmp-title {
   justify-content: space-between;
   align-items: unset;
-  &.is-active .lmp-tab {
+  &.is-open {
     color: var(--text-accent);
+  }
+  &.is-active {
+    color: var(--text-normal);
   }
 }
 
@@ -48,3 +44,28 @@
   transition: max-height 0.5s ease !important;
 }
 
+.tree-item-inner-text.lmp-color-0 { color: var(--color-red); }
+.tree-item-inner-text.lmp-color-1 { color: var(--color-orange); }
+.tree-item-inner-text.lmp-color-2 { color: var(--color-yellow); }
+.tree-item-inner-text.lmp-color-3 { color: var(--color-green); }
+.tree-item-inner-text.lmp-color-4 { color: var(--color-cyan); }
+.tree-item-inner-text.lmp-color-5 { color: var(--color-blue); }
+.tree-item-inner-text.lmp-color-6 { color: var(--color-purple); }
+.tree-item-inner-text.lmp-color-7 { color: var(--color-pink); }
+
+
+.lmp-settings {
+  textarea {
+    resize: none;
+    width: 20em;
+    height: 8em;
+  }
+}
+
+body.is-phone {
+  .lmp-settings {
+    textarea {
+      width: 100%;
+    }
+  }
+}
