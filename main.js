@@ -1,6 +1,6 @@
 'use strict';
 
-const { Plugin, ItemView, setIcon, setTooltip, Setting, EventRef, debounce,
+const { Plugin, ItemView, DeferredView, setIcon, setTooltip, Setting, EventRef, debounce,
   PluginSettingTab, FileView, Menu, TFile, WorkspaceLeaf } = require('obsidian');
 
 const DEFAULT_SETTINGS = {
@@ -200,7 +200,7 @@ class LastMonthView extends ItemView {
     // 🔆Header for the Total Count
     const totalEl = createDiv({ cls: 'tree-item lmp-total' });
     const titleEl = totalEl.createDiv({ cls: 'tree-item-self'});
-    setTooltip(titleEl, meta.first + ' — ' + meta.last);
+    setTooltip(titleEl, meta.last + ' — ' + meta.first);
     const iconEl = titleEl.createDiv({ cls: 'tree-item-icon' });
     setIcon(iconEl, 'calendar-range');
     const innerEl = titleEl.createDiv({ cls: 'tree-item-inner' });
@@ -324,6 +324,7 @@ class LastMonthView extends ItemView {
       });
       contentEl.appendChild(childrenEl);
     });
+    // TODO append list of open files for troubleshooting purposes (in small muted font)
   }
 
   buildMonthMenu() {
@@ -423,7 +424,7 @@ class LastMonthView extends ItemView {
       total: 0 
     };
     this.hiddenFiles = {};
-    const openFiles = this.getOpenFiles();
+    const openTabs = this.getOpenTabs();
 
     const hits = files
       .filter((file) => {
@@ -435,8 +436,8 @@ class LastMonthView extends ItemView {
         const cweek = getMonday(file.stat.ctime);
         const mweek = getMonday(file.stat.mtime);
         const isNew = (cweek === mweek); // created during this week
-        const leaf = openFiles[file.path]?.leaf ?? null;
-        const active = openFiles[file.path]?.active ?? false;
+        const leaf = openTabs[file.path]?.leaf ?? null;
+        const active = openTabs[file.path]?.active ?? false;
         /** @type {THit} */
         const hit = {
           file: file,
@@ -524,23 +525,18 @@ class LastMonthView extends ItemView {
     }
   }
 
-  getOpenFiles() {
-    const openFiles = {};
-    const active_id = this.app.workspace.getMostRecentLeaf().id;
-    this.app.workspace.iterateRootLeaves((leaf) => {
-      const view = leaf.view;
-      if (view instanceof FileView && view.file?.name) {
-        const file = view.file;
-        openFiles[file.path] = {
-          leaf: leaf,
-          active: leaf.id === active_id,
-        }
+  getOpenTabs() {
+    const openTabs = {};
+    const activeId = this.app.workspace.getMostRecentLeaf().id;
+    for (let leaf of this.app.workspace.getLeavesOfType('markdown')) {
+      openTabs[leaf.view.getState().file] = {
+        leaf: leaf,
+        active: leaf.id === activeId,
       }
-    });
-    return openFiles;
+    }
+    return openTabs;
   }
 }
-
 
 class LastMonthSettingTab extends PluginSettingTab {
   constructor(app, plugin) {
