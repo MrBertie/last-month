@@ -1,7 +1,7 @@
 {
 	"id"           : "last-month",
 	"name"         : "Last Month",
-	"version"      : "0.2.1",
+	"version"      : "0.2.2",
 	"minAppVersion": "0.16.3",
 	"description"  : "New sidebar to list pages that were created and/or modified in last few months.",
 	"author"       : "MrBertie",

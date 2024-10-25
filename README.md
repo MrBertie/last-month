@@ -5,8 +5,11 @@ Provides a new left sidebar showing a list of all recently created and modified 
 
 # How to install
 
-Download the latest **last-month** [release](https://github.com/MrBertie/last-month/releases), unzip it, and drop the folder into your `{Obsidian Vault}/.obsidian/plugins` folder.  Edit the plugin folder name to remove the version number, e.g. `-v.0.1.1`, and then restart Obsidian.
-You will need to go to the *Plugin Settings* page in Obsidian and enable the plugin.
+Download the [latest version](https://github.com/MrBertie/last-month/archive/refs/heads/main.zip) from this link, and unzip it.  
+You see a folder called `last-month-main`; rename this folder as `last-month` and then add it into your `{Obsidian Vault}/.obsidian/plugins` folder.  
+Restart Obsidian and go to the *Community Plugins Settings* page to enable the plugin.
+
+*Note: you can also click the `<>Code` button above and choose `Download.zip`*
 
 # How to use
 

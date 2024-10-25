@@ -1,5 +1,3 @@
-'use strict';
-
 const { Plugin, ItemView, DeferredView, setIcon, setTooltip, Setting, EventRef, debounce,
   PluginSettingTab, FileView, Menu, TFile, WorkspaceLeaf } = require('obsidian');
 
@@ -46,7 +44,7 @@ class LastMonthPlugin extends Plugin {
 
     this.registerView(
       LAST_MONTH_VIEW,
-      (leaf) => (this.view = new LastMonthView(leaf, this)),
+      (leaf) => new LastMonthView(leaf, this),
     );
     
     this.addCommand({
@@ -64,9 +62,9 @@ class LastMonthPlugin extends Plugin {
     //this.app.workspace.onLayoutReady(this.activateView.bind(this));
 
     this.addSettingTab(new LastMonthSettingTab(this.app, this));
-
-    console.log('%c' + this.manifest.name + ' ' + this.manifest.version +
-      ' loaded', 'background-color: teal; padding:4px; border-radius:4px');
+    // biome-ignore lint: Loading indicator, runs once only; // ⚠️
+    console.log(`%c${this.manifest.name} ${this.manifest.version} loaded`, 
+      'background-color: teal; padding:4px; border-radius:4px');
   }
 
   onunload() {
@@ -164,19 +162,17 @@ class LastMonthView extends ItemView {
     setTooltip(collapseBtn, Lang.collapseAllTip, { placement: 'bottom' }); //default
     collapseBtn.onclick = () => {
       this.collapsed = !this.collapsed;
-      this.contentEl
-        .querySelectorAll('.tree-item-children')
-        .forEach((el) => {
-          if (this.collapsed) {
-            el.addClass('is-collapsed');
-            setIcon(collapseBtn, 'chevrons-up-down');
-            setTooltip(collapseBtn, Lang.expandAllTip, { placement: 'bottom' });
-          } else {
-            el.removeClass('is-collapsed');
-            setIcon(collapseBtn, 'chevrons-down-up');
-            setTooltip(collapseBtn, Lang.expandAllTip, { placement: 'bottom' });
-          }
-        });
+      for (const el of this.contentEl.querySelectorAll('.tree-item-children')) {
+        if (this.collapsed) {
+          el.addClass('is-collapsed');
+          setIcon(collapseBtn, 'chevrons-up-down');
+          setTooltip(collapseBtn, Lang.expandAllTip, { placement: 'bottom' });
+        } else {
+          el.removeClass('is-collapsed');
+          setIcon(collapseBtn, 'chevrons-down-up');
+          setTooltip(collapseBtn, Lang.expandAllTip, { placement: 'bottom' });
+        }
+      }
     }
     this.containerEl.parentElement.prepend(navEl); // Add at the top of the main view div
   }
@@ -200,7 +196,7 @@ class LastMonthView extends ItemView {
     // 🔆Header for the Total Count
     const totalEl = createDiv({ cls: 'tree-item lmp-total' });
     const titleEl = totalEl.createDiv({ cls: 'tree-item-self'});
-    setTooltip(titleEl, meta.last + ' — ' + meta.first);
+    setTooltip(titleEl, `${meta.last} — ${meta.first}`);
     const iconEl = titleEl.createDiv({ cls: 'tree-item-icon' });
     setIcon(iconEl, 'calendar-range');
     const innerEl = titleEl.createDiv({ cls: 'tree-item-inner' });
@@ -214,13 +210,12 @@ class LastMonthView extends ItemView {
     const flairEl = titleEl.createDiv({ cls: 'tree-item-flair-outer' });
     flairEl.createSpan({ cls: 'tree-item-flair', text: meta.total });
     setTooltip(flairEl, 
-      Lang.hiddenFolders + '\u{000A}—\u{000A}' + this.settings.hiddenFolders.replace('\n', '\u{000A}'));
+      `${Lang.hiddenFolders}\u{000A}—\u{000A}${this.settings.hiddenFolders.replace('\n', '\u{000A}')}`);
 
     contentEl.appendChild(totalEl);
 
     let color = 0;
     groupHeaders.forEach((hits, header) => {
-
       // 🔆Headers for the Week Groups
       const itemEl = contentEl.createDiv({ cls: 'tree-item' });
       const headerEl = itemEl.createDiv({ cls: 'tree-item-self is-clickable ' });
@@ -232,12 +227,12 @@ class LastMonthView extends ItemView {
         text: header.toUpperCase(),
       });
       const flairEl = headerEl.createDiv({ cls: 'tree-item-flair-outer' });
-      let count = hits.length;
+      const count = hits.length;
       flairEl.createSpan({ cls: 'tree-item-flair', text: count });
       itemEl.addClass('lmp-header');
       setIcon(iconEl, 'calendar');
       if (this.settings.rainbow) {
-        textEl.addClass('lmp-color-' + (color % 8));
+        textEl.addClass(`lmp-color-${(color % 8)}`);
         color++;
       }
       
@@ -251,12 +246,11 @@ class LastMonthView extends ItemView {
       
       // 🔆Children: Matching files for each Week header
       const childrenEl = itemEl.createDiv({ cls: 'tree-item-children' });
-      hits.forEach(hit => {
-
+      for (const hit of hits) {
         const fileEl = childrenEl.createDiv({ cls: 'tree-item nav-file lmp-file' });
-        const tip = hit.path + 
-            '\u{000A}⇄ ' + new Date(hit.file?.stat.mtime).toLocaleString(DEFAULT_SETTINGS.dateLocale) + 
-            '\u{000A}\u{263C} ' + new Date(hit.file?.stat.ctime).toLocaleString(DEFAULT_SETTINGS.dateLocale);
+        const modified = `⇄ ${new Date(hit.file?.stat.mtime).toLocaleString(DEFAULT_SETTINGS.dateLocale)}`;
+        const created = `\u{263C} ${new Date(hit.file?.stat.ctime).toLocaleString(DEFAULT_SETTINGS.dateLocale)}`;
+        const tip = `${hit.path}\u{000A}${modified}\u{000A}${created}`;
         setTooltip(fileEl, tip, { placement: 'right' });
         const titleEl = fileEl.createDiv({
           cls: 'tree-item-self is-clickable nav-file-title lmp-title',
@@ -266,7 +260,7 @@ class LastMonthView extends ItemView {
           cls: 'tree-item-inner nav-file-title-content lmp-title-content',
           text: hit.name,
         });
-        const icon = (hit.new ? 'file-plus-2' : 'file');
+        const icon = (hit.new ? 'lucide-file' : 'lucide-file-clock');
         setIcon(iconEl, icon);
 
         if (hit.active) {
@@ -321,10 +315,9 @@ class LastMonthView extends ItemView {
         titleEl.addEventListener('click', (event) => {
           this.openFile(hit, event.ctrlKey || event.metaKey);
         });
-      });
+      }
       contentEl.appendChild(childrenEl);
     });
-    // TODO append list of open files for troubleshooting purposes (in small muted font)
   }
 
   buildMonthMenu() {
@@ -333,7 +326,7 @@ class LastMonthView extends ItemView {
       menu.addItem(item => {
         item.setTitle(value)
         item.setIcon('calendar')
-        item.setChecked(key == this.settings.countMonths)
+        item.setChecked(Number(key) === this.settings.countMonths)
         item.onClick(() => {
           this.settings.countMonths = Number(value.substring(0, 1));
           this.menu = this.buildMonthMenu();
@@ -384,34 +377,13 @@ class LastMonthView extends ItemView {
   }
 
   /**
-   * @typedef {Object} THit
-   * @property {TFile} file
-   * @property {string} name
-   * @property {string} path
-   * @property {Date} date
-   * @property {Date} week
-   * @property {boolean} new
-   * @property {WorkspaceLeaf} leaf
-   * @property {string} type
-   * @property {boolean} active
-   */
-
-  ///** @typedef {Map<string, Array<THit>>} THits */
-
-  /**
-   * @typedef {Map} THits
-   * @property {string} header
-   * @property {Array<THit>}
-   */
-
-  /**
    * Get created and modified files from recent months (setting)
    * If a file was created and then modified in the same week then the created one is shown
    * @returns {{THits, Object}} THits, meta: {first, last, total}
    */
   getRecentFiles() {
     const today = new Date();
-    let cutoff = new Date();
+    const cutoff = new Date();
     cutoff.setMonth(cutoff.getMonth() - this.settings.countMonths);
     const patterns = (this.settings.hiddenFolders ? this.settings.hiddenFolders.split('\n') : []);
     const files = this.app.vault.getMarkdownFiles();
@@ -457,13 +429,13 @@ class LastMonthView extends ItemView {
     /** @type {THits} */
     const groups = new Map();
     meta.total = hits.length;
-    hits.forEach((hit) => {
+    for (const hit of hits) {
       const hdr = getHeader(hit.week);
       if (!groups.has(hdr)) {
         groups.set(hdr, []);
       }
       groups.get(hdr).push(hit);
-    });
+    }
     return { groups, meta };
     
     /* ⚒️ INTERNAL FUNCTIONS */
@@ -475,21 +447,21 @@ class LastMonthView extends ItemView {
       const eow = addDays(sow, 6);
       const bom = sow.toLocaleString('en-US', { month: 'short' });
       const eom = eow.toLocaleString('en-US', { month: 'short' });
-      const xmth = (bom === eom) ? '' : '\u{2008}' + eom; // 2008 = punc. space
-      cache[week] = bom + ' ' + sow.getDate() + '\u{2009}\u{2013}' + xmth + ' ' + eow.getDate();  // 2009 = hairspace
+      const xmth = (bom === eom) ? '' : `\u{2008}${eom}`; // 2008 = punc. space
+      cache[week] = `${bom} ${sow.getDate()}\u{2009}\u{2013}${xmth} ${eow.getDate()}`;  // 2009 = hairspace
       return cache[week];
     }
 
-    function addDays(date, days) {
-      let result = new Date(date);
-      result.setDate(result.getDate() + days);
-      return result;
+    function addDays(startDate, days) {
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + days);
+      return date;
     }
-    // the first day of the week (Monday by default)
-    function getMonday(date) {
-      date = new Date(date);
+    // Date of the first day of the week (Monday by default)
+    function getMonday(startDate) {
+      const date = new Date(startDate);
       const day = date.getDay();
-      const diff = date.getDate() - day + (day == 0 ? -6 : 1); // adjust when day is sunday
+      const diff = date.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
       return new Date(date.setDate(diff)).toDateString();
     }
 
@@ -513,9 +485,9 @@ class LastMonthView extends ItemView {
           if (match) {
             if (!this.hiddenFiles[pattern]) this.hiddenFiles[pattern] = '';
             if (valid) {
-              this.hiddenFiles[pattern] += '  — ' + path + '\n';
+              this.hiddenFiles[pattern] += `  — ${path}\n`;
             } else {
-              this.hiddenFiles[pattern] = '  — ' + Lang.invalidRegex + '\n';
+              this.hiddenFiles[pattern] = `  — ${Lang.invalidRegex}\n`;
             }
           }
           return match;
@@ -528,7 +500,7 @@ class LastMonthView extends ItemView {
   getOpenTabs() {
     const openTabs = {};
     const activeId = this.app.workspace.getMostRecentLeaf().id;
-    for (let leaf of this.app.workspace.getLeavesOfType('markdown')) {
+    for (const leaf of this.app.workspace.getLeavesOfType('markdown')) {
       openTabs[leaf.view.getState().file] = {
         leaf: leaf,
         active: leaf.id === activeId,
@@ -547,9 +519,9 @@ class LastMonthSettingTab extends PluginSettingTab {
   display() {
     const hiddenFiles = () => {
       let folders = '';
-      Object.entries(this.plugin.view.hiddenFiles).forEach(([key, value]) => {
-        folders += '▶ ' + key + ' ◀\n' + value + '\n';
-      });
+      for (const [key, value] of Object.entries(this.plugin.view.hiddenFiles)) {
+        folders += `▶ ${key} ◀\n${value}\n`;
+      }
       return folders;
     }
 
@@ -632,3 +604,24 @@ class LastMonthSettingTab extends PluginSettingTab {
 module.exports = {
   default: LastMonthPlugin,
 }
+
+/* ✏️ TYPES */
+
+/**
+ * @typedef {Object} THit
+ * @property {TFile} file
+ * @property {string} name
+ * @property {string} path
+ * @property {Date} date
+ * @property {Date} week
+ * @property {boolean} new
+ * @property {WorkspaceLeaf} leaf
+ * @property {string} type
+ * @property {boolean} active
+ */
+
+/**
+ * @typedef {Map} THits
+ * @property {string} header
+ * @property {Array<THit>}
+ */
